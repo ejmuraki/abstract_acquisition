@@ -1,0 +1,218 @@
+---
+author:
+- name: 
+  affiliation: 
+  corresponding: 
+  address: 
+  email: 
+  role:
+shorttitle: "Are first words emotional?"
+output:
+  papaja::apa6_docx: default
+  papaja::apa6_pdf: default
+floatsintext: yes
+figurelist: no
+tablelist: no
+footnotelist: no
+linenumbers: no
+mask: no
+draft: no
+documentclass: apa7
+classoption: man
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+library(jtools)
+library(stats)
+library(Hmisc)
+library(ggplot2)
+library(olsrr)
+library(corrplot)
+library(renv)
+library(papaja)
+library(plyr)
+library(dplyr)
+library(magrittr)
+library(readr)
+library(apaTables)
+library(tidyr)
+library(interactions)
+library(lm.beta)
+library(ggplot2)
+library(cowplot)
+```
+
+# Results
+
+```{r load data and format, include = FALSE}
+#read in data
+AoA <- read_csv("Dale_ORourke_AoA.csv")
+Concrete <- read_csv("Brysbaert_Kuperman_Concrete.csv")
+Val_Arousal <- read_csv("Warriner_Valence.csv")
+Sem_D <- read_csv("Hoffman_SEMD.csv")
+Freq_Length <- read_csv("lgSUBTLWF.csv")
+Lancaster <- read_csv("Lancaster_sensorimotor.csv")
+
+#remove all columns but word and rating
+AoA_test <- AoA %>% 
+  select(Word, AoAtestbased)
+
+AoA_rate <- AoA %>% 
+  select(Word, AoArating)
+
+Concrete <- Concrete %>% 
+  select(Word, Conc.M)
+
+Valence <- Val_Arousal %>% 
+  select(Word, V.Mean.Sum) %>% 
+  mutate(Val_pos = ifelse(V.Mean.Sum >= 5, V.Mean.Sum, NA), Val_neg = ifelse(V.Mean.Sum <= 5, V.Mean.Sum, NA), Val_ext = abs(V.Mean.Sum - 5))
+
+Arousal <- Val_Arousal %>% 
+  select(Word, A.Mean.Sum)
+
+Intero <- Lancaster %>% 
+  select(Word, Interoceptive.mean)
+
+Head <- Lancaster %>% 
+  select(Word, Head.mean)
+
+Mouth <- Lancaster %>% 
+  select(Word, Mouth.mean)
+
+Sem_D <- Sem_D %>% 
+  select(Word, SemD)
+
+Freq <- Freq_Length %>% 
+  select(Word, LgSUBTLWF)
+
+Length <- Freq_Length %>% 
+  select(Word, Length)
+
+#take min values for unique items in AoA test based norms
+low_AoA_test <- aggregate(AoAtestbased ~ Word, AoA_test, min)
+max_AoA_test <- aggregate(AoAtestbased ~ Word, AoA_test, max)
+AoA_rate_unique <- unique(AoA_rate)
+colnames(low_AoA_test) <- c("Word", "AoA_test_min")
+colnames(max_AoA_test) <- c("Word", "AoA_test_max")
+
+#merge unique AoA test-based min and max values with concreteness and AoA ratings to see availability
+AoA_all <- merge(low_AoA_test, max_AoA_test)
+
+#merge unique AoA test-based min and max values with concreteness and valence and semD to see availability
+AoA_regression_full <- merge(AoA_all, Concrete, all.x = TRUE)
+AoA_regression_full <- merge(AoA_regression_full, Valence, all.x = TRUE)
+AoA_regression_full <- merge(AoA_regression_full, Freq, all.x = TRUE)
+AoA_regression_full <- merge(AoA_regression_full, Length, all.x = TRUE)
+AoA_regression_full <- merge(AoA_regression_full, Sem_D, all.x = TRUE)
+AoA_regression_full <- merge(AoA_regression_full, Arousal, all.x = TRUE)
+AoA_regression_full <- merge(AoA_regression_full, Intero, all.x = TRUE)
+AoA_regression_full <- merge(AoA_regression_full, Head, all.x = TRUE)
+AoA_regression_full <- merge(AoA_regression_full, Mouth, all.x = TRUE)
+
+
+#Get count of how many have all variables of interest
+AoA_regression_narm <- AoA_regression_full %>% 
+  select(AoA_test_min, LgSUBTLWF, Length, Conc.M, SemD, V.Mean.Sum, A.Mean.Sum, Interoceptive.mean, Head.mean, Mouth.mean) %>%
+  na.omit()
+
+sample <- format(nrow(AoA_regression_narm), big.mark = ",")
+
+#Get data table for regression and correlation
+AoA_regression <- AoA_regression_full %>% 
+  select(Word, AoA_test_min, Length, LgSUBTLWF, Conc.M, V.Mean.Sum, Val_pos, Val_neg, Val_ext, A.Mean.Sum,  Interoceptive.mean, Mouth.mean, Head.mean, SemD) %>% 
+  rename(AoA = AoA_test_min, Concreteness = Conc.M, Valence = V.Mean.Sum, Arousal = A.Mean.Sum, Frequency = LgSUBTLWF, Interoceptive = Interoceptive.mean, Head = Head.mean, Mouth = Mouth.mean)
+
+
+#Create table of descriptive statistics and correlations
+table1 <-apa.cor.table(AoA_regression, table.number = 1)
+descriptives <- as.data.frame(table1$table.body)
+descriptives <- descriptives %>% 
+  filter(M > 0)
+
+```
+
+We extracted test-based age of acquisition norms from Brysbaert and Biemiller (2017), which were derived from the data in Dale & O'Rourke (1981) Living Word Vocabulary, concreteness ratings (Brysbaert et al., 2013), valence and arousal ratings (Warriner et al., 2013), semantic diversity ratings (Hoffman et al., 2013), interoceptive, head, and mouth strength ratings (Lynott et al., 2020), log subtitle frequency (Brysbaert & New, 2009) and length. In total we have `r printnum(sample)` items which had values for all variables of interest. We calculated correlations between all variables of interest, as well as the variables of positive valence (i.e. all variables with valence greater than or equal to 5), negative valence (i.e. all variables with valence less than or equal to 5) and valence extremity (i.e. the absolute value of the valence rating from 5, the neutral point on the scale). All variables were significantly correlated (p < .01) with the exception of head and mouth perceptual strength, which were not correlated with test-based AoA, nor was mouth perceptual strength correlated with valence (Table 1).
+
+```{r table 1, echo=FALSE}
+#Create table of descriptives and correlations
+apa_table(descriptives, caption = table1$table.title, note = "M and SD are used to represent mean and standard deviation, respectively. * indicates p < .05. ** indicates p < .01.", row.names = FALSE)
+```
+
+```{r Omnibus Model, include = FALSE}
+omnibusdat <- AoA_regression %>% 
+  select(Word, AoA, Frequency, Length, Concreteness, Valence, Arousal, SemD, Interoceptive, Head, Mouth) %>% 
+  mutate(Valence2 = Valence*Valence) %>% 
+  drop_na()
+
+omnibus <- lm(AoA ~ scale(Length) + scale(Frequency) + scale(Concreteness) + scale(Valence) + scale(Valence^2) + scale(Arousal) + scale(SemD) + scale(Interoceptive) + scale(Head) + scale(Mouth), data = omnibusdat)
+summary(omnibus)
+
+omnibus_int <- lm(AoA ~ scale(Length) + scale(Frequency) + scale(Concreteness)*scale(Valence) + scale(Concreteness)*scale(Valence^2) + scale(Concreteness)*scale(Arousal) + scale(Concreteness)*scale(SemD) + scale(Concreteness)*scale(Interoceptive) + scale(Concreteness)*scale(Head) + scale(Concreteness)*scale(Mouth), data = omnibusdat)
+int_output <-summary(omnibus_int)
+
+omnibus_plot <- lm(AoA ~ Length + Frequency + Concreteness*poly(Valence, 2) + Concreteness*Arousal + Concreteness*SemD + Concreteness*Interoceptive + Concreteness*Head + Concreteness*Mouth, data = omnibusdat)
+summary(omnibus_plot)
+
+```
+
+We tested theories of abstract word acquisition with a hierarchical regression model. In the first stage we entered all predictors of test-based AoA. The first stage accounted for `r sprintf("%0.2f%%", summary(omnibus)$r.squared * 100)` of variance in test-based AoA. We observed significant effects for all predictors with the exception of head and mouth perceptual strength (see Table 2 for all model parameters). We then added interactions between concreteness and each semantic dimension to assess the Affective Embodiment Account and Learning Through Language theories of abstract word acquisition. There was a significant improvement in model fit with the addition of the interactions (Table 2).
+
+The Affective Embodiment Account was tested via an interaction between concreteness and valence in predicting test-based AoA. Valence was entered as a linear and quadratic term due to the bipolar nature of the scale (e.g., 1 = negative, 9 = positive, 5 = neutral). We observed a significant interaction between concreteness and the quadratic term of valence on test-based AoA while holding all other parameters constant, *b* = `r int_output$coefficients[13,1]`, *t*(`r omnibus_int$df.residual`) = `r int_output$coefficients[13,3]`, *p* = `r int_output$coefficients[13,4]`, such that neutral abstract words were learned significantly later than neutral concrete words. The interaction between concreteness and valence on test-based AoA is depicted in Figure 1A. 
+
+To test alternative aspects of emotional experience that could be related to abstract word acquisition, we examined interactions between concreteness and arousal, interoceptive strength, head action strength, and mouth action strength. We observed a significant interaction between concreteness and interoceptive strength on test-based AoA while holding all other parameters constant, *b* = `r int_output$coefficients[16,1]`, *t*(`r omnibus_int$df.residual`) = `r int_output$coefficients[16,3]`, *p* = `r int_output$coefficients[16,4]`, such that abstract words with low interoceptive strength were learned later than concrete words with low interoceptive strength; abstract words with high interoceptive strength were not acquired later than concrete words with high interoceptive strength. The interaction between concreteness and interoceptive strength on test-based AoA is depicted in Figure 1B. 
+
+There was also a significant interaction between concreteness and mouth action strength on test-based AoA while holding all other parameters constant, *b* = `r int_output$coefficients[18,1]`, *t*(`r omnibus_int$df.residual`) = `r int_output$coefficients[18,3]`, *p* = `r int_output$coefficients[18,4]`, such that abstract words with lower mouth action strength were learned later than concrete words with lower mouth action strength; abstract words with higher mouth action strength were not acquired later than concrete words with higher mouth action strength. The interaction between concreteness and mouth action strength on test-based AoA is depicted in Figure 1C. 
+
+We observed no significant interaction between concreteness and arousal on test-based AoA while holding all other parameters constant, *b* = `r int_output$coefficients[14,1]`, *t*(`r omnibus_int$df.residual`) = `r int_output$coefficients[14,3]`, *p* = `r int_output$coefficients[14,4]` (see Figure 1D). Nor was there a significant interaction between concreteness and head action strength, *b* = `r int_output$coefficients[17,1]`, *t*(`r omnibus_int$df.residual`) = `r int_output$coefficients[17,3]`, *p* = `r int_output$coefficients[17,4]` (see Figure 1E).
+
+Finally, we tested the Learning Through Language proposal via an interaction between concreteness and semantic diversity in predicting test-based AoA. We observed no significant interaction between concreteness and semantic diversity, *b* = `r int_output$coefficients[15,1]`, *t*(`r omnibus_int$df.residual`) = `r int_output$coefficients[15,3]`, *p* = `r int_output$coefficients[15,4]` (see Figure 1F).
+
+```{r Table 2 Omnibus, echo = FALSE, include = FALSE} 
+apa.reg.table(omnibus, omnibus_int, filename = "Table2_APA.doc", table.number = 2, digits = 3)
+```
+
+```{r Figures, fig.width = 5, fig.height = 3, fig.align = "center"}
+A <-interact_plot(omnibus_plot, pred = Valence, modx = Concreteness, modxvals = "plus-minus", centered = "all", data = omnibusdat, partial.residuals = TRUE, interval = TRUE, int.width = 0.95, point.alpha = 0, modx.labels = c("Abstract", "Concrete"), colors = "Set1", x.label = "Valence", y.label = "Test-based AoA")
+
+A <-A + theme_light() + theme(legend.position = "none")
+
+D <-interact_plot(omnibus_plot, pred = Arousal, modx = Concreteness, modxvals = "plus-minus", centered = "all", data = omnibusdat, partial.residuals = TRUE, interval = TRUE, int.width = 0.95, point.alpha = 0, modx.labels = c("Abstract", "Concrete"), colors = "Set1", x.label = "Arousal", y.label = "Test-based AoA")
+
+D <-D + theme_light() + theme(legend.position = "none") 
+
+B <-interact_plot(omnibus_plot, pred = Interoceptive, modx = Concreteness, modxvals = "plus-minus", centered = "all", data = omnibusdat, partial.residuals = TRUE, interval = TRUE, int.width = 0.95, point.alpha = 0, modx.labels = c("Abstract", "Concrete"), colors = "Set1", x.label = "Interoceptive Strength", y.label = "Test-based AoA")
+
+B <-B + theme_light() + theme(legend.position = c(0.8,0.8)) + theme(legend.key.size = unit(1.5,"line"))
+
+C <-interact_plot(omnibus_plot, pred = Mouth, modx = Concreteness, modxvals = "plus-minus", centered = "all", data = omnibusdat, partial.residuals = TRUE, interval = TRUE, int.width = 0.95, point.alpha = 0, modx.labels = c("Abstract", "Concrete"), colors = "Set1", x.label = "Mouth Action Strength", y.label = "Test-based AoA")
+
+C <-C + theme_light() + theme(legend.position = "none")
+
+E <-interact_plot(omnibus_plot, pred = Head, modx = Concreteness, modxvals = "plus-minus", centered = "all", data = omnibusdat, partial.residuals = TRUE, interval = TRUE, int.width = 0.95, point.alpha = 0, modx.labels = c("Abstract", "Concrete"), colors = "Set1", x.label = "Head Action Strength", y.label = "Test-based AoA")
+
+E <-E + theme_light() + theme(legend.position = "none")
+
+Fplot <-interact_plot(omnibus_plot, pred = SemD, modx = Concreteness, modxvals = "plus-minus", centered = "all", data = omnibusdat, partial.residuals = TRUE, interval = TRUE, int.width = 0.95, point.alpha = 0, modx.labels = c("Abstract", "Concrete"), colors = "Set1", x.label = "Semantic Diversity", y.label = "Test-based AoA")
+
+Fplot <-Fplot + theme_light() + theme(legend.position = "none")
+```
+
+
+```{r Figure 1, fig.width = 9, fig.height = 10, fig.align = "left"}
+plot_grid(A, B, C, D, E, Fplot, labels = "auto", ncol = 2, label_size = 11)
+```
+
+```{r srsquared, include = FALSE, echo = FALSE}
+omnibus_bweights <-summ(omnibus, digits = 3, part.corr = TRUE)
+sr2 <- as.data.frame(omnibus_bweights$coeftable)
+sr2 <- sr2 %>% 
+  select(Est., part.r) %>% 
+  na.omit() %>% 
+  mutate(sr2 = part.r^2)
+
+sr <- omnibus_bweights$coeftable
+sr2 <- as.character(round(sr^2, 3))
+sr2
+```
+
